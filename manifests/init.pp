@@ -8,69 +8,83 @@
 #
 # Requires:
 #
-#	Define['wget']
-#
 # Sample Usage:
 #
 # [Remember: No empty lines between comments and class definition]
 class bamboo (
-  $version = '4.4.0',
-  $extension = 'tar.gz',
-  $installdir = '/usr/local',
-  $home = '/var/local/bamboo',
-  $user = 'bamboo'){
+  $version = '5.6.0',
+  $install_prefix = '/usr/local',
+  $home_prefix= '/var/local',
+  $user = 'bamboo') {
 
-  $srcdir = '/usr/local/src'
-  $dir = "${installdir}/bamboo-${version}"
+  $exec_path = '/bin/:/sbin/:/usr/bin/:/usr/sbin/'
 
-  File {
-    owner  => $user,
-    group  => $user,
-  }
+  $download_url = "http://www.atlassian.com/software/bamboo/downloads/binary/atlassian-bamboo-${version}.tar.gz"
+  $zip_file = "/tmp/atlassian-bamboo-${version}.tar.gz"
+  $zip_output = "/tmp/atlassian-bamboo-${version}"
+  $install_dir = "${install_prefix}/bamboo-${version}"
 
-  if !defined(User[$user]) {
-    user { $user:
+  $home_dir = "${home_prefix}/bamboo"
+
+  user { $user:
       ensure     => present,
       home       => $home,
       managehome => false,
       system     => true,
-    }
-  }
-
-  wget::fetch { 'bamboo':
-    source      => "http://www.atlassian.com/software/bamboo/downloads/binary/atlassian-bamboo-${version}.${extension}",
-    destination => "${srcdir}/atlassian-bamboo-${version}.tar.gz",
   } ->
-  exec { 'bamboo':
-    command => "tar zxvf ${srcdir}/atlassian-bamboo-${version}.tar.gz && mv atlassian-bamboo-${version} bamboo-${version} && chown -R ${user} bamboo-${version}",
-    creates => "${installdir}/bamboo-${version}",
-    cwd     => $installdir,
-    logoutput => "on_failure",
+  exec { 'download bamboo':
+    command => "wget ${download_url}",
+    creates => $zip_file,
+    user    => $user,
+    cwd     => '/tmp',
+    path    => $exec_path,
+  } ->
+  exec { 'unzip bamboo':
+    command => "tar zxf ${zip_file}",
+    creates => $zip_output,
+    user    => $user,
+    cwd     => '/tmp',
+    path    => $exec_path,
+  } ->
+  exec { 'copy bamboo to installation directory':
+    command => "mv ${zip_output} ${install_dir}",
+    creates => $install_dir,
+    user    => $user,
+    path    => $exec_path,
+  } ->
+  file { $install_dir:
+    ensure  => directory,
+    owner   => $user,
+    group   => 'root',
+    mode    => 0640,
+    recurse => true,
+  } ->
+  file { "${install_dir}/atlassian-bamboo/WEB-INF/classes/bamboo-init.properties":
+    content => template('bamboo-init.properties.erb'),
   } ->
   file { $home:
-    ensure => directory,
+    ensure  => directory,
+    owner   => $user,
+    group   => 'root',
+    mode    => 0640,
+    recurse => true,
   } ->
   file { "${home}/logs":
     ensure => directory,
   } ->
-  file { "${dir}/webapp/WEB-INF/classes/bamboo-init.properties":
-    content => "bamboo.home=${home}/data",
-  } ->
   file { '/etc/init.d/bamboo':
-    ensure => link,
-    target => "${dir}/bamboo.sh",
-  } ~>
-  file { '/etc/default/bamboo':
     ensure  => present,
-    content => "RUN_AS_USER=${user}
-BAMBOO_PID=${home}/bamboo.pid
-BAMBOO_LOG_FILE=${home}/logs/bamboo.log",
+    content => template('bamboo.erb'),
+    user    => 'root',
+    group   => 'root',
+    mode    => 0770
+  } ~>
+  exec { 'configure bamboo service':
+    command => 'update-rc.d bamboo defaults'
   } ~>
   service { 'bamboo':
     ensure     => running,
-    enable     => false, # service bamboo does not support chkconfig
     hasrestart => true,
-    hasstatus  => true,
+    hasstatus  => false,
   }
-
 }
