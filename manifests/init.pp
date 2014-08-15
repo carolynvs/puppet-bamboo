@@ -60,6 +60,7 @@ class bamboo (
     recurse => true,
   } ->
   file { "${install_dir}/atlassian-bamboo/WEB-INF/classes/bamboo-init.properties":
+    ensure  => 'file',
     content => template('bamboo/bamboo-init.properties.erb'),
   } ->
   file { $home_dir:
@@ -73,7 +74,7 @@ class bamboo (
     ensure => directory,
   } ->
   file { '/etc/init.d/bamboo':
-    ensure  => present,
+    ensure  => file,
     content => template('bamboo/bamboo.erb'),
     owner   => 'root',
     group   => 'root',
