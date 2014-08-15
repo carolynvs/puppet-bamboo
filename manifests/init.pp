@@ -75,7 +75,7 @@ class bamboo (
   file { '/etc/init.d/bamboo':
     ensure  => present,
     content => template('bamboo/bamboo.erb'),
-    user    => 'root',
+    owner   => 'root',
     group   => 'root',
     mode    => 0770
   } ~>
